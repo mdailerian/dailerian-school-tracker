@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dailerian School Tracker — Daily Email Notifier
+Dailerian School Tracker â Daily Email Notifier
 Runs every day at 4:00 PM, pulls live data from Genesis and Schoology,
 and sends a formatted HTML summary to all recipients.
 """
@@ -16,7 +16,7 @@ from email.mime.text import MIMEText
 import requests
 from bs4 import BeautifulSoup
 
-# ─── CONFIGURATION ────────────────────────────────────────────────────────────
+# âââ CONFIGURATION ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 GMAIL_SENDER    = "martin.dailerian@gmail.com"
 GMAIL_APP_PASS  = "rmep fexi gqhv lopd"
