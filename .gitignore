@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+school_tracker.log
+.DS_Store
