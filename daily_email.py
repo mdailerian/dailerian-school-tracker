@@ -106,15 +106,20 @@ def assign_cell(subject, assignments):
 def build_rows(grades, assignments=None):
     rows = ""
     for i, c in enumerate(grades):
+        assign = assign_cell(c["subject"], assignments) if assignments else None
+        if assignments and assign == '<span style="color:#aaa;font-size:12px;">Nothing due</span>':
+            continue
         bg = "#ffffff" if i % 2 == 0 else "#f9f9f9"
         badge = grade_badge(c["letter"], c["current"])
-        assign = assign_cell(c["subject"], assignments) if assignments else '<span style="color:#aaa;font-size:12px;">-</span>'
+        assign_html = assign if assign else '<span style="color:#aaa;font-size:12px;">-</span>'
         rows += (f"<tr style='background:{bg};'>"
                  f"<td style='padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;'>"
                  f"<strong>{c['subject']}</strong><br>"
                  f"<span style='color:#888;font-size:11px;'>{c['teacher']}</span></td>"
                  f"<td style='padding:10px 14px;border-bottom:1px solid #eee;text-align:center;'>{badge}</td>"
-                 f"<td style='padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;line-height:1.6;'>{assign}</td></tr>")
+                 f"<td style='padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;line-height:1.6;'>{assign_html}</td></tr>")
+    if not rows and assignments:
+        rows = "<tr><td colspan='3' style='padding:14px;text-align:center;color:#27500A;font-size:13px;'>All clear - no assignments due this week!</td></tr>"
     return rows
 
 def build_email():
