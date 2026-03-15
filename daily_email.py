@@ -17,6 +17,7 @@ RECIPIENTS = [
     "Monika.Grabania@vitaminshoppe.com",
     "martin.dailerian@jpmchase.com",
     "arinadailerian@chatham-nj.org",
+    "martin@dailerian.com",
 ]
 
 logging.basicConfig(level=logging.INFO,
