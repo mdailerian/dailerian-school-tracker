@@ -87,12 +87,20 @@ def grade_badge(letter, score):
 
 def assign_cell(subject, assignments):
     items = []
+    seen = set()
+    sl = subject.lower()
     for a in assignments.get("overdue", []):
-        if any(w in a["subject"].lower() for w in subject.lower().split()):
-            items.append(f'<span style="color:#791F1F;font-size:12px;">OVERDUE: {a["title"]} (due {a["due"]})</span>')
+        al = a["subject"].lower()
+        if al in sl or sl in al:
+            if a["title"] not in seen:
+                seen.add(a["title"])
+                items.append(f'<span style="color:#791F1F;font-size:12px;">OVERDUE: {a["title"]} (due {a["due"]})</span>')
     for a in assignments.get("upcoming", []):
-        if any(w in a["subject"].lower() for w in subject.lower().split()):
-            items.append(f'<span style="color:#0C447C;font-size:12px;">Due {a["due"]}: {a["title"]}</span>')
+        al = a["subject"].lower()
+        if al in sl or sl in al:
+            if a["title"] not in seen:
+                seen.add(a["title"])
+                items.append(f'<span style="color:#0C447C;font-size:12px;">Due {a["due"]}: {a["title"]}</span>')
     return "<br>".join(items) if items else '<span style="color:#aaa;font-size:12px;">Nothing due</span>'
 
 def build_rows(grades, assignments=None):
