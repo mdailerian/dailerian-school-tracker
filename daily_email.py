@@ -6,7 +6,7 @@ import json
 import urllib.request
 from datetime import datetime
 
-SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "SG.CsnmLvATRHKWlC7qD4BA1w.GqNskQwNrzoAxtEOc20RMvWwE02u1zMiJXjdgt-BlM")
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 SENDER_EMAIL = os.environ.get("GMAIL_SENDER", "martin.dailerian@gmail.com")
 SEND_TIME = "16:00"
 
