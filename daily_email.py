@@ -4,11 +4,17 @@ import logging
 import os
 import json
 import urllib.request
+import urllib.parse
 from datetime import datetime
 
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 SENDER_EMAIL = os.environ.get("GMAIL_SENDER", "martin.dailerian@gmail.com")
 SEND_TIME = "16:00"
+
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN  = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
+ANDRE_PHONE        = os.environ.get("ANDRE_PHONE", "+16462442292")
 
 RECIPIENTS = [
     "andredailerian37@gmail.com",
@@ -226,11 +232,52 @@ def send_email():
     with urllib.request.urlopen(req) as resp:
         log.info(f"Email sent!!SendGrid status: {resp.status} to {len(RECIPIENTS)} recipients.")
 
+def send_sms():
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_FROM_NUMBER:
+        log.warning("Twilio credentials not set - skipping SMS.")
+        return
+    from datetime import datetime, timedelta
+    cutoff = datetime.now() - timedelta(weeks=2)
+    lines = []
+    today = datetime.now().strftime("%a %b %-d")
+    lines.append(f"Dailerian Tracker - {today}")
+    lines.append("Andre's upcoming assignments:")
+    found = False
+    for a in ANDRE_ASSIGNMENTS.get("overdue", []):
+        try:
+            due = datetime.strptime(f"{a['due']} {datetime.now().year}", "%b %d %Y")
+            if due < cutoff:
+                continue
+        except Exception:
+            pass
+        lines.append(f"  OVERDUE: {a['title']} ({a['due']})")
+        found = True
+    for a in ANDRE_ASSIGNMENTS.get("upcoming", []):
+        lines.append(f"  {a['due']}: {a['title']}")
+        found = True
+    if not found:
+        lines.append("  All clear - nothing due!")
+    body = "\n".join(lines)
+    import base64 as _b64
+    auth = _b64.b64encode(f"{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}".encode()).decode()
+    data = urllib.parse.urlencode({
+        "To": ANDRE_PHONE, "From": TWILIO_FROM_NUMBER, "Body": body
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json",
+        data=data,
+        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+        method="POST"
+    )
+    with urllib.request.urlopen(req) as resp:
+        log.info(f"SMS sent to Andre! Twilio status: {resp.status}")
+
 def run_daily_job():
     log.info("=" * 50)
     log.info("Running Dailerian School Tracker daily job...")
     try:
         send_email()
+        send_sms()
         log.info("Daily job complete.")
     except Exception as e:
         log.error(f"Failed to send email: {e}")
