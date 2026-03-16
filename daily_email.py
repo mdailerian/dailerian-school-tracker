@@ -51,7 +51,7 @@ ANDRE_ASSIGNMENTS = {
     "overdue": [{"title": "Voice From My Lai", "subject": "US History 2A", "due": "Feb 12"}],
     "upcoming": [
         {"title": "HWK: unit packet pages 3,6-7", "subject": "Chemistry A", "due": "Mon 3/16"},
-        {"title": "Test CH 58Pa$ Part 2",              "subject": "Algebra 2A",  "due": "Mon 3/16"},
+        {"title": "Test CH 58Pa$ Part 2",              "subject": "Algebra 2A",  "due": "Mon 3/16"},
         {"title": "HWK: Finish lab analysis",        "subject": "Chemistry A", "due": "Tue 3/17"},
         {"title": "Read chapter 12",                 "subject": "English 10",  "due": "Tue 3/17"},
         {"title": "HWK: unit packet pages 8-9",      "subject": "Chemistry A", "due": "Wed 3/18"},
@@ -205,7 +205,7 @@ def send_email():
     payload = json.dumps({
         "personalizations": [{"to": [{"email": r} for r in RECIPIENTS]}],
         "from": {"email": SENDER_EMAIL, "name": "Dailerian School Tracker"},
-        "subject":subject,
+        "subject":subject,
         "content": [{"type": "text/html", "value": html}]
     }).encode("utf-8")
     req = urllib.request.Request(
