@@ -86,13 +86,22 @@ def grade_badge(letter, score):
             f'{letter} {s}</span>')
 
 def assign_cell(subject, assignments):
+    from datetime import datetime, timedelta
     items = []
     seen = set()
     sl = subject.lower()
+    cutoff = datetime.now() - timedelta(weeks=2)
     for a in assignments.get("overdue", []):
         al = a["subject"].lower()
         if al in sl or sl in al:
             if a["title"] not in seen:
+                # Try to parse the due date - skip if older than 2 weeks
+                try:
+                    due_date = datetime.strptime(f"{a['due']} {datetime.now().year}", "%b %d %Y")
+                    if due_date < cutoff:
+                        continue
+                except Exception:
+                    pass  # If date can't be parsed, include it anyway
                 seen.add(a["title"])
                 items.append(f'<span style="color:#791F1F;font-size:10px;">&#9888; {a["title"]} ({a["due"]})</span>')
     for a in assignments.get("upcoming", []):
