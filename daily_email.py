@@ -309,10 +309,15 @@ def run_daily_job():
     log.info("Running Dailerian School Tracker daily job...")
     try:
         send_email()
-        send_sms()
-        log.info("Daily job complete.")
+        log.info("Email complete.")
     except Exception as e:
-        log.error(f"Failed to send email: {e}")
+        log.error(f"Email failed: {e}")
+    try:
+        send_sms()
+        log.info("SMS complete.")
+    except Exception as e:
+        log.error(f"SMS failed: {e}")
+    log.info("Daily job complete.")
 
 if __name__ == "__main__":
     log.info(f"Started. Scheduled daily at {SEND_TIME}.")
