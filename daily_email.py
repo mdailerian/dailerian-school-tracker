@@ -11,10 +11,8 @@ SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 SENDER_EMAIL = os.environ.get("GMAIL_SENDER", "martin.dailerian@gmail.com")
 SEND_TIME = "16:00"  # SMS enabled
 
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN  = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
-ANDRE_PHONE        = os.environ.get("ANDRE_PHONE", "+16462442292")
+TEXTBELT_KEY = os.environ.get("TEXTBELT_KEY", "")
+ANDRE_PHONE  = os.environ.get("ANDRE_PHONE", "+16462442292")
 
 RECIPIENTS = [
     "andredailerian37@gmail.com",
@@ -233,15 +231,15 @@ def send_email():
         log.info(f"Email sent!!SendGrid status: {resp.status} to {len(RECIPIENTS)} recipients.")
 
 def send_sms():
-    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_FROM_NUMBER:
-        log.warning("Twilio credentials not set - skipping SMS.")
+    if not TEXTBELT_KEY:
+        log.warning("Textbelt key not set - skipping SMS.")
         return
     from datetime import datetime, timedelta
     cutoff = datetime.now() - timedelta(weeks=2)
     lines = []
     today = datetime.now().strftime("%a %b %-d")
     lines.append(f"Dailerian Tracker - {today}")
-    lines.append("Andre's upcoming assignments:")
+    lines.append("Andre upcoming:")
     found = False
     for a in ANDRE_ASSIGNMENTS.get("overdue", []):
         try:
@@ -250,27 +248,28 @@ def send_sms():
                 continue
         except Exception:
             pass
-        lines.append(f"  OVERDUE: {a['title']} ({a['due']})")
+        lines.append(f"OVERDUE: {a['title']} ({a['due']})")
         found = True
     for a in ANDRE_ASSIGNMENTS.get("upcoming", []):
-        lines.append(f"  {a['due']}: {a['title']}")
+        lines.append(f"{a['due']}: {a['title']}")
         found = True
     if not found:
-        lines.append("  All clear - nothing due!")
+        lines.append("All clear!")
     body = "\n".join(lines)
-    import base64 as _b64
-    auth = _b64.b64encode(f"{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}".encode()).decode()
     data = urllib.parse.urlencode({
-        "To": ANDRE_PHONE, "From": TWILIO_FROM_NUMBER, "Body": body
+        "phone": ANDRE_PHONE.replace("+1", ""),
+        "message": body,
+        "key": TEXTBELT_KEY
     }).encode("utf-8")
     req = urllib.request.Request(
-        f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json",
+        "https://textbelt.com/text",
         data=data,
-        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST"
     )
     with urllib.request.urlopen(req) as resp:
-        log.info(f"SMS sent to Andre! Twilio status: {resp.status}")
+        result = resp.read().decode()
+        log.info(f"SMS sent to Andre! Textbelt response: {result}")
 
 def run_daily_job():
     log.info("=" * 50)
