@@ -11,8 +11,11 @@ SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 SENDER_EMAIL = os.environ.get("GMAIL_SENDER", "martin.dailerian@gmail.com")
 SEND_TIME = "16:00"
 
-TEXTBELT_KEY = os.environ.get("TEXTBELT_KEY", "")
-ANDRE_PHONE  = os.environ.get("ANDRE_PHONE", "+16462442292")
+TEXTBELT_KEY   = os.environ.get("TEXTBELT_KEY", "")
+ANDRE_PHONES   = [
+    os.environ.get("ANDRE_PHONE", "+16462442292"),
+    "+19085147364",
+]
 
 RECIPIENTS = [
     "andredailerian37@gmail.com",
@@ -289,20 +292,21 @@ def send_sms():
         l = ''.join(c if ord(c) < 128 else '' for c in l)
         clean_lines.append(l)
     body = "\n".join(clean_lines)
-    data = urllib.parse.urlencode({
-        "phone": ANDRE_PHONE.replace("+1", ""),
-        "message": body,
-        "key": TEXTBELT_KEY
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://textbelt.com/text",
-        data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST"
-    )
-    with urllib.request.urlopen(req) as resp:
-        result = resp.read().decode()
-        log.info(f"SMS sent to Andre! Textbelt response: {result}")
+    for phone in ANDRE_PHONES:
+        data = urllib.parse.urlencode({
+            "phone": phone.replace("+1", ""),
+            "message": body,
+            "key": TEXTBELT_KEY
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://textbelt.com/text",
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as resp:
+            result = resp.read().decode()
+            log.info(f"SMS sent to {phone}! Textbelt response: {result}")
 
 def run_daily_job():
     log.info("=" * 50)
