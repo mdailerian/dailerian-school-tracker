@@ -267,7 +267,13 @@ def send_sms():
         found = True
     if not found:
         lines.append("All clear - nothing due!")
-    body = "\n".join(lines)
+    # Sanitize: replace smart quotes, special chars that corrupt SMS
+    clean_lines = []
+    for l in lines:
+        l = l.replace("\u2019","'").replace("\u2018","'").replace("\u201c",'"').replace("\u201d",'"')
+        l = ''.join(c if ord(c) < 128 else '' for c in l)
+        clean_lines.append(l)
+    body = "\n".join(clean_lines)
     data = urllib.parse.urlencode({
         "phone": ANDRE_PHONE.replace("+1", ""),
         "message": body,
