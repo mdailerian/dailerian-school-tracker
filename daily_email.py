@@ -237,7 +237,7 @@ def send_sms():
     from datetime import datetime, timedelta
     now = datetime.now()
     cutoff_old = now - timedelta(weeks=2)
-    cutoff_future = now + timedelta(days=3)
+    cutoff_future = (now + timedelta(days=3)).date()
     lines = []
     today = now.strftime("%a %b %-d")
     lines.append(f"Dailerian Tracker - {today}")
@@ -251,22 +251,22 @@ def send_sms():
                 continue
         except Exception:
             pass
-        lines.append(f"OVERDUE ({a['subject']}): {a['title']} ({a['due']})")
+        lines.append(f"* OVERDUE - {a['subject']}: {a['title']}")
         found = True
     for a in ANDRE_ASSIGNMENTS.get("upcoming", []):
         try:
-            # Parse dates like "Mon 3/16" -> take last part "3/16"
             date_part = a['due'].split(' ')[-1]
             m, day = date_part.split('/')
-            due = datetime(now.year, int(m), int(day))
-            if due.date() > (now + timedelta(days=3)).date():
+            due_date = datetime(now.year, int(m), int(day)).date()
+            if due_date > cutoff_future:
                 continue
+            day_label = datetime(now.year, int(m), int(day)).strftime("%a")
         except Exception:
-            pass
-        lines.append(f"{a['due']} ({a['subject']}): {a['title']}")
+            day_label = a['due'].split(' ')[0] if ' ' in a['due'] else ''
+        lines.append(f"* {day_label} - {a['subject']}: {a['title']}")
         found = True
     if not found:
-        lines.append("All clear - nothing due in 3 days!")
+        lines.append("All clear - nothing due!")
     body = "\n".join(lines)
     data = urllib.parse.urlencode({
         "phone": ANDRE_PHONE.replace("+1", ""),
