@@ -251,19 +251,19 @@ def send_sms():
                 continue
         except Exception:
             pass
-        lines.append(f"OVERDUE: {a['title']} ({a['due']})")
+        lines.append(f"OVERDUE ({a['subject']}): {a['title']} ({a['due']})")
         found = True
     for a in ANDRE_ASSIGNMENTS.get("upcoming", []):
         try:
-            # Parse dates like "Mon 3/16" or "Tue 3/17"
-            due_str = a['due'].split(' ')[-1]  # get "3/16"
-            m, day = due_str.split('/')
+            # Parse dates like "Mon 3/16" -> take last part "3/16"
+            date_part = a['due'].split(' ')[-1]
+            m, day = date_part.split('/')
             due = datetime(now.year, int(m), int(day))
-            if due > cutoff_future:
+            if due.date() > (now + timedelta(days=3)).date():
                 continue
         except Exception:
-            pass  # include if can't parse
-        lines.append(f"{a['due']}: {a['title']}")
+            pass
+        lines.append(f"{a['due']} ({a['subject']}): {a['title']}")
         found = True
     if not found:
         lines.append("All clear - nothing due in 3 days!")
