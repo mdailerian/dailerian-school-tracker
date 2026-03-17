@@ -308,7 +308,7 @@ def run_daily_job():
     log.info("=" * 50)
     log.info("Running Dailerian School Tracker daily job...")
     try:
-        send_email()
+        # send_email()  # temporarily disabled
         send_sms()
         log.info("Daily job complete.")
     except Exception as e:
