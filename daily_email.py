@@ -230,6 +230,22 @@ def send_email():
     with urllib.request.urlopen(req) as resp:
         log.info(f"Email sent!!SendGrid status: {resp.status} to {len(RECIPIENTS)} recipients.")
 
+SUBJECT_SHORT = {
+    "honors english 10": "ENG", "us history 2a": "HIST", "spanish 3": "SPA",
+    "chemistry a (lab)": "CHEM", "chemistry a": "CHEM", "algebra 2a": "ALG",
+    "experiencing fine art": "ART", "health / pe / driver ed": "PE", "english 10": "ENG",
+}
+
+def short_subj(s):
+    return SUBJECT_SHORT.get(s.lower(), s[:4].upper())
+
+def short_title(t):
+    return (t.replace("HWK: unit packet pages", "pkt p.")
+             .replace("HWK: unit packet ", "pkt ")
+             .replace("HWK: ", "")
+             .replace("chapter ", "ch.")
+             .replace("LAB QUIZ", "QUIZ"))
+
 def send_sms():
     if not TEXTBELT_KEY:
         log.warning("Textbelt key not set - skipping SMS.")
@@ -240,9 +256,8 @@ def send_sms():
     cutoff_future = (now + timedelta(days=3)).date()
     lines = []
     today = now.strftime("%a %b %-d")
-    lines.append(f"Dailerian Tracker - {today}")
-    lines.append(f"Andre GPA: 2.97")
-    lines.append("Due next 3 days:")
+    lines.append(f"Tracker {today} | Andre GPA:2.97")
+    lines.append("Due 3 days:")
     found = False
     for a in ANDRE_ASSIGNMENTS.get("overdue", []):
         try:
