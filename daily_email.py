@@ -17,21 +17,18 @@ ANDRE_ID          = "20286810"
 ARINA_ID          = "20316811"
 SEND_TIME         = "16:00"
 
-ANDRE_PHONES = [
-    ANDRE_PHONE,
-    "+19085147364",
-    "+16462442253",
-]
+# SMS_RECIPIENTS: comma-separated list in Railway env var
+# e.g. "+16462442292,+19085147364,+16462442253"
+_sms_env = os.environ.get("SMS_RECIPIENTS", "+16462442292,+19085147364,+16462442253")
+ANDRE_PHONES = [p.strip() for p in _sms_env.split(",") if p.strip()]
 
-EMAIL_RECIPIENTS = [
-    "andredailerian37@gmail.com",
-    "andredailerian@chatham-nj.org",
-    "monika.a.grabania@gmail.com",
-    "Monika.Grabania@vitaminshoppe.com",
-    "martin.dailerian@jpmchase.com",
-    "arinadailerian@chatham-nj.org",
-    "martin@dailerian.com",
-]
+# EMAIL_RECIPIENTS: comma-separated list in Railway env var
+# e.g. "a@b.com,c@d.com"
+_email_env = os.environ.get(
+    "EMAIL_RECIPIENTS",
+    "andredailerian37@gmail.com,andredailerian@chatham-nj.org,monika.a.grabania@gmail.com,Monika.Grabania@vitaminshoppe.com,martin.dailerian@jpmchase.com,arinadailerian@chatham-nj.org,martin@dailerian.com"
+)
+EMAIL_RECIPIENTS = [e.strip() for e in _email_env.split(",") if e.strip()]
 
 logging.basicConfig(
     level=logging.INFO,
