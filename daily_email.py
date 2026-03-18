@@ -64,12 +64,24 @@ SUBJECT_SHORT = {
 
 def genesis_login():
     import http.cookiejar
+    import ssl
     jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(jar),
+        urllib.request.HTTPSHandler(context=ctx),
+    )
     opener.addheaders = [
-        ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
+        ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0"),
         ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+        ("Accept-Language", "en-US,en;q=0.5"),
+        ("Connection", "keep-alive"),
     ]
+    # Step 1: GET the login page to pick up any pre-login cookies
+    opener.open("https://parents.chatham-nj.org/genesis/sis/view?gohome=true")
+    # Step 2: POST credentials
     data = urllib.parse.urlencode({
         "j_username": GENESIS_USER,
         "j_password": GENESIS_PASS,
@@ -79,7 +91,8 @@ def genesis_login():
         "https://parents.chatham-nj.org/genesis/sis/j_security_check?parents=Y",
         data=data,
         method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        headers={"Content-Type": "application/x-www-form-urlencoded",
+                 "Referer": "https://parents.chatham-nj.org/genesis/sis/view?gohome=true"},
     )
     opener.open(req)
     log.info("Genesis login successful.")
