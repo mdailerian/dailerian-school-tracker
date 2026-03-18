@@ -1,101 +1,161 @@
 # Dailerian School Tracker - Project Notes
 Last updated: March 17, 2026
 
-## What This Is
-A fully automated daily notification system that sends:
-- Email (HTML, print-friendly) to 7 family recipients at 4:00 PM every day
-- SMS to 3 phone numbers with Andre's GPA + assignments due in the next 3 days
+---
 
-Data is hardcoded from Chatham School District portals (Genesis + Schoology).
-Future enhancement: live scraping.
+## What This Is
+A fully automated daily notification system that:
+- Logs into the Chatham Genesis parent portal at 4:00 PM every day
+- Scrapes live grades for Andre and Arina
+- Sends a formatted HTML email to 7 family recipients
+- Sends an SMS summary to 3 phone numbers with Andre's GPA and any alerts
+
+No grades or assignments are hardcoded. All data is fetched live from Genesis on every run.
+
+---
 
 ## Architecture
-GitHub (code) -> Railway (runs 24/7) -> SendGrid (email) + Textbelt (SMS)
+Genesis (live scrape) -> Email (SendGrid) + SMS (Textbelt)
+All running on Railway (us-east4), triggered by GitHub push, scheduled at 16:00 daily.
+
 - Language: Python 3.11
 - Scheduler: schedule library - fires daily at 16:00
-- On startup: runs job immediately, then waits for 4:00 PM schedule
-- Server region: us-east4 (required for Textbelt North America keys)
+- On startup: runs job immediately, then waits for 4:00 PM
+- Server region: us-east4 (REQUIRED - Textbelt North America keys only work from US servers)
+
+---
 
 ## Repository
 GitHub: https://github.com/mdailerian/dailerian-school-tracker
 - Account: mdailerian (martin@dailerian.com)
-- Files: daily_email.py, requirements.txt, Procfile, runtime.txt
+- Main file: daily_email.py
+- Also: requirements.txt, Procfile, runtime.txt, PROJECT_NOTES.md
+
+---
 
 ## Deployment
 Railway: https://railway.com/project/6d4fb75f-68d4-471e-a157-ee63931a23b5
 - Service: worker
 - Service ID: 0e3bbac8-c2f4-428d-bd91-5d2d3c2c9751
-- Region: us-east4 (must stay US for Textbelt to work)
+- Region: us-east4 (do NOT change - Textbelt will fail from non-US regions)
 - Auto-deploys on every GitHub push
 
-## Environment Variables (Railway)
-All secrets live in Railway only - never in GitHub.
+---
 
-| Variable | Purpose |
-|----------|---------|
-| SENDGRID_API_KEY | SendGrid email API key |
-| GMAIL_SENDER | martin.dailerian@gmail.com (verified sender) |
-| GMAIL_APP_PASS | Gmail app password (legacy, no longer used) |
-| TEXTBELT_KEY | Textbelt SMS API key (~100 texts purchased) |
-| ANDRE_PHONE | Primary test phone: +16462442292 |
-| TWILIO_ACCOUNT_SID | Legacy Twilio (not used, can delete) |
-| TWILIO_AUTH_TOKEN | Legacy Twilio (not used, can delete) |
-| TWILIO_FROM_NUMBER | Legacy Twilio (not used, can delete) |
+## Environment Variables (Railway)
+ALL secrets and credentials live in Railway only - never in GitHub or this document.
+
+| Variable | Purpose | Notes |
+|----------|---------|-------|
+| SENDGRID_API_KEY | SendGrid email API key | Never paste in chat - GitHub auto-revokes |
+| GMAIL_SENDER | Sender email address | martin.dailerian@gmail.com |
+| GMAIL_APP_PASS | Legacy Gmail password | No longer used for sending |
+| TEXTBELT_KEY | Textbelt SMS API key | ~5 texts remaining Mar 17 - buy more |
+| ANDRE_PHONE | Primary SMS recipient | +16462442292 (test/Martin number) |
+| GENESIS_USER | Genesis parent login email | martin@dailerian.com |
+| GENESIS_PASS | Genesis parent login password | Set directly in Railway, never share |
+| TWILIO_ACCOUNT_SID | Legacy Twilio | Not used, safe to delete |
+| TWILIO_AUTH_TOKEN | Legacy Twilio | Not used, safe to delete |
+| TWILIO_FROM_NUMBER | Legacy Twilio | Not used, safe to delete |
+
+---
+
+## How the Scraper Works
+
+### Login
+1. GET the Genesis login page to pick up pre-login cookies
+2. POST credentials to: https://parents.chatham-nj.org/genesis/sis/j_security_check?parents=Y
+3. Fields: j_username, j_password, idTokenString (empty)
+4. Session maintained via cookie jar throughout the run
+
+### Grade Scraping
+- Andre (student ID: 20286810): gradebook page via Genesis parents portal
+- Arina (student ID: 20316811): same URL pattern with her student ID
+- The grades page contains a table with class "notecard" containing span elements
+- Span pattern: [term] | [subject name] [grade1] [grade2] [grade3] ...
+  - term = FY, S1, S2, Q1, Q2, Q3, Q4
+  - grades are floats like 83.40, or "---" for empty marking periods
+  - Current grade = last non-null grade value
+  - Previous grade = second-to-last non-null grade value (for drop detection)
+- GPA is calculated dynamically from scraped grades (4.0 scale)
+
+### Error Handling
+If Genesis scrape fails OR returns 0 courses:
+- Normal email and SMS are NOT sent
+- A plain-text error notification is sent to martin@dailerian.com only
+- Error email includes: error message, timestamp, Railway logs link, common fixes
+
+Common scrape failure causes:
+- Genesis password changed (update GENESIS_PASS in Railway)
+- Genesis portal is down
+- Session redirect / login cookies not accepted
+- HTML structure of the grades page changed
+
+---
 
 ## Email Recipients (7)
 1. andredailerian37@gmail.com
-2. andredailerian@chatham-nj.org  -- PENDING IT whitelist
+2. andredailerian@chatham-nj.org  -- PENDING: school IT whitelist
 3. monika.a.grabania@gmail.com
 4. Monika.Grabania@vitaminshoppe.com
 5. martin.dailerian@jpmchase.com
-6. arinadailerian@chatham-nj.org  -- PENDING IT whitelist
+6. arinadailerian@chatham-nj.org  -- PENDING: school IT whitelist
 7. martin@dailerian.com
 
-Note: Email sent to Dr. Michael LaSusa (mlasusa@chatham-nj.org, 973-457-2500) to whitelist sender.
+Contact for whitelist: Dr. Michael LaSusa (mlasusa@chatham-nj.org, 973-457-2500)
+
+---
 
 ## SMS Recipients (3)
-1. +16462442292 - test/Martin number
+Hardcoded in daily_email.py ANDRE_PHONES list:
+1. ANDRE_PHONE env var (default: +16462442292) - test/Martin number
 2. +19085147364 - Andre's phone
 3. +16462442253 - additional recipient
 
-To update Andre's phone: change ANDRE_PHONE in Railway Variables.
-To add/remove numbers: edit ANDRE_PHONES list in daily_email.py.
+To add/remove numbers: edit ANDRE_PHONES list in daily_email.py and commit.
+To change primary: update ANDRE_PHONE in Railway Variables.
 
-## Student Data
+SMS content: Andre's GPA + any alerts. If no alerts: "No alerts today".
 
-### Andre Dailerian - Grade 10, Chatham HS
-- Student ID: 20286810
-- Genesis login: parent account (martin@dailerian.com)
-- Schoology: andredailerian@chatham-nj.org
+---
 
-Current Grades (MP2):
-| Subject | Teacher | Grade |
-|---------|---------|-------|
-| Honors English 10 | Agelis, Nicholas | B 83.3 |
-| US History 2A | Nagy, Brian | D 69.3 ALERT |
-| Spanish 3 | Fix, Marlin | A 90.6 |
-| Chemistry A (lab) | Naumova, Yelena | B 82.1 |
-| Algebra 2A | Cordano, Dagmar | C 77.6 |
-| Experiencing Fine Art | Hull, Candace | A 94.7 |
-| Health / PE / Driver Ed | Picariello, Evan | A 100.0 |
-| GPA | | 2.97 |
+## Student Info
+- Andre Dailerian: Grade 10, Chatham HS, Student ID 20286810
+- Arina Dailerian: Grade 7, Chatham MS, Student ID 20316811
+- Grades are NOT stored in code - fetched live from Genesis every run
 
-### Arina Dailerian - Grade 7, Chatham MS
-- Student ID: 20316811
+---
 
-Current Grades (MP3):
-| Subject | Teacher | Grade |
-|---------|---------|-------|
-| Band 7 | Spriggs, Christie | A 95.9 |
-| Dream Room Design Lab | Hitchings, James | A 96.9 |
-| English 7 Honors | Iannuzzi, George | B 81.4 |
-| Health 7 | Nydegger, Kelly | A 92.5 |
-| Mathematics Honors 7 | Novick, Amanda | B 80.0 |
-| Physical Education 7 | Murphy, Liam | A 100.0 |
-| Science 7 | LoPorto, Lauren | B 85.8 |
-| World Cultures & Geography | Becker, Carly | A 93.8 |
-| French 7 | Engell, Tine | A 90.7 |
-| GPA | | 3.79 |
+## Alert Logic
+Alerts trigger when (evaluated against live scraped data):
+- Any of Andre's grades drops below 75
+- Any grade drops 5+ points from previous marking period (either student)
+
+Alerts appear in the email header (yellow box) and SMS message.
+
+---
+
+## Email Format
+- Compact 2-column layout (Andre left, Arina right)
+- Print-friendly with media print CSS
+- Color-coded grade badges: A=green, B=blue, C=amber, D=red
+- Live GPA calculated from scraped grades
+- Subject and current grade shown for all courses
+
+---
+
+## Hardcoded Values Audit (as of Mar 17, 2026)
+The only values NOT in Railway env vars:
+- Student IDs: 20286810 (Andre), 20316811 (Arina) - not sensitive
+- SMS phone numbers: +19085147364, +16462442253 - move to env vars if needed
+- Email recipients list - hardcoded in script, not sensitive
+- Subject abbreviation map - static lookup table, not sensitive
+- Fallback sender email: martin.dailerian@gmail.com (Railway var takes precedence)
+- Fallback Genesis user: martin@dailerian.com (Railway var takes precedence)
+
+NO grades, GPAs, assignments, passwords, or API keys are hardcoded.
+
+---
 
 ## Services & Costs
 | Service | Purpose | Cost | Account |
@@ -103,52 +163,37 @@ Current Grades (MP3):
 | GitHub | Code storage | Free | mdailerian |
 | Railway | 24/7 hosting | Free ($5/mo credit) | martin@dailerian.com |
 | SendGrid | Email delivery | Free (100/day) | martin@dailerian.com |
-| Textbelt | SMS delivery | ~$9/100 texts | Key in Railway |
+| Textbelt | SMS delivery | ~$9/100 texts (~5 remaining) | Key in Railway |
 | Twilio | SMS (abandoned) | Paid but unused | martin@dailerian.com |
 
-## How to Update Grades / Assignments
-Open daily_email.py in GitHub and update:
-- ANDRE_GRADES = [ ... ]       # Andre's subjects, teachers, grades
-- ARINA_GRADES = [ ... ]       # Arina's subjects, teachers, grades
-- ANDRE_ASSIGNMENTS = {
-    "overdue": [ ... ],        # Overdue assignments
-    "upcoming": [ ... ],       # Upcoming with due dates like "Mon 3/16"
-  }
-Commit -> Railway auto-redeploys within 2 minutes.
-
-## Alert Logic
-Alerts appear in the email header (yellow box) when:
-- Any of Andre's grades drops below 75
-- Any grade drops 5+ points from previous marking period
-- Any assignment is overdue (within last 2 weeks)
-
-## SMS Format
-Single segment (<160 chars) to avoid carrier garbling:
-  Tracker Mon Mar 17 | Andre GPA:2.97
-  Due 3 days:
-  * OVERDUE - HIST: Voice From My Lai
-  * Mo CHEM: pkt p.3,6-7
-  * Mo ALG: Test CH 5 Part 2
-  * Tu CHEM: Finish lab analysis
-  * Tu ENG: Read ch.12
-
-Subject abbreviations: ENG, HIST, SPA, CHEM, ALG, ART, PE
-
-## Known Issues / TODO
-1. SMS formatting - some assignment titles still garble on certain carriers
-2. Arina's assignments - not connected (Schoology login not yet provided)
-3. Live data scraping - grades/assignments are hardcoded, not auto-scraped
-4. Textbelt quota - ~20 texts remaining as of Mar 17, buy more at textbelt.com
+---
 
 ## How to Resume This Project
 Start a new Claude conversation and say:
+
   "I have a school tracker project called Dailerian School Tracker.
    GitHub: github.com/mdailerian/dailerian-school-tracker
    Railway project ID: 6d4fb75f-68d4-471e-a157-ee63931a23b5
    See PROJECT_NOTES.md in the repo for full details."
 
+---
+
+## Known Issues / TODO
+1. Genesis scraping returns 0 grades - login works but HTML parser needs fixing
+   - Error notification email sent to martin@dailerian.com when this happens
+   - Debug: check Railway logs for HTML snippet to identify correct CSS class/structure
+
+2. Assignments not yet scraped from Schoology
+   - Email shows grades only (no due dates)
+   - Schoology requires separate login for Andre
+
+3. Textbelt quota low (~5 texts remaining as of Mar 17) - buy more at textbelt.com
+
+---
+
 ## Security Notes
-- NEVER paste API keys in Claude chat - GitHub secret scanning auto-revokes them
+- NEVER paste API keys or passwords in Claude chat
+  GitHub secret scanning auto-revokes keys immediately upon detection
 - All secrets stored in Railway environment variables only
-- GitHub token should be revoked at github.com/settings/tokens
-- Passwords to change: Genesis (martin@dailerian.com), GitHub (mdailerian)
+- Revoke the GitHub personal access token used during build at github.com/settings/tokens
+- Change passwords: Genesis portal (martin@dailerian.com), GitHub account (mdailerian)
