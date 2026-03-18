@@ -183,7 +183,19 @@ def fetch_grades(opener, student_id, student_name):
     url = (f"https://parents.chatham-nj.org/genesis/parents"
            f"?tab1=studentdata&tab2=gradebook&studentid={student_id}&action=form")
     with opener.open(url) as resp:
+        final_url = resp.url
         html = resp.read().decode("utf-8", errors="replace")
+    log.info(f"Fetched grades page for {student_name}: final_url={final_url}, html_len={len(html)}")
+    # Check if we got redirected to login
+    if "j_security_check" in final_url or "gohome=true" in final_url or len(html) < 1000:
+        log.error(f"Session expired or redirected for {student_name}. URL: {final_url}")
+        return []
+    # Log snippet to debug HTML structure
+    notecard_pos = html.find("notecard")
+    if notecard_pos >= 0:
+        log.info(f"Found notecard at pos {notecard_pos}: {html[notecard_pos:notecard_pos+100]}")
+    else:
+        log.warning(f"No notecard found in HTML for {student_name}. Snippet: {html[1000:1200]}")
     return parse_grades(html, student_name)
 
 
