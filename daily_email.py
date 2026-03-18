@@ -15,6 +15,7 @@ TEXTBELT_KEY   = os.environ.get("TEXTBELT_KEY", "")
 ANDRE_PHONES   = [
     os.environ.get("ANDRE_PHONE", "+16462442292"),
     "+19085147364",
+    "+16462442253",
 ]
 
 RECIPIENTS = [
