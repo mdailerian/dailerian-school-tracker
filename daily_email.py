@@ -414,7 +414,9 @@ def run_daily_job():
 
 if __name__ == "__main__":
     log.info(f"Started. Scheduled daily at {SEND_TIME}.")
-    run_daily_job()
+    # NOTE: startup run disabled - only runs at scheduled time to avoid
+    # hammering Genesis on every redeploy and triggering account lockouts.
+    # To trigger a manual run, redeploy between 15:59 and 16:01.
     schedule.every().day.at(SEND_TIME).do(run_daily_job)
     while True:
         schedule.run_pending()
