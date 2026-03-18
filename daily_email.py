@@ -342,17 +342,64 @@ def send_sms(andre_grades, alerts):
             log.info(f"SMS sent to {phone}! Textbelt response: {result}")
 
 
+def send_error_email(error_msg):
+    """Send a plain error notification to martin@dailerian.com."""
+    if not SENDGRID_API_KEY:
+        log.error("Cannot send error email - no SendGrid key.")
+        return
+    today = datetime.now().strftime("%a %b %-d %Y %H:%M")
+    payload = json.dumps({
+        "personalizations": [{"to": [{"email": "martin@dailerian.com"}]}],
+        "from": {"email": SENDER_EMAIL, "name": "Dailerian School Tracker"},
+        "subject": f"Tracker ERROR - {today}",
+        "content": [{"type": "text/plain", "value":
+            f"The Dailerian School Tracker encountered an error and could not fetch grades.\n\n"
+            f"Time: {today}\n"
+            f"Error: {error_msg}\n\n"
+            f"The daily email and SMS were NOT sent with fresh data.\n"
+            f"Please check Railway logs at:\n"
+            f"https://railway.com/project/6d4fb75f-68d4-471e-a157-ee63931a23b5\n\n"
+            f"Common fixes:\n"
+            f"- Genesis password may have changed (update GENESIS_PASS in Railway)\n"
+            f"- Genesis portal may be down (try again tomorrow)\n"
+            f"- Check Railway logs for full stack trace\n"
+        }]
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.sendgrid.com/v3/mail/send",
+        data=payload,
+        headers={"Authorization": f"Bearer {SENDGRID_API_KEY}", "Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            log.info(f"Error notification sent to martin@dailerian.com (status {resp.status})")
+    except Exception as e:
+        log.error(f"Failed to send error notification: {e}")
+
+
 def run_daily_job():
     log.info("=" * 50)
     log.info("Running Dailerian School Tracker daily job...")
     andre_grades, arina_grades = [], []
+    scrape_error = None
     try:
         opener = genesis_login()
         andre_grades = fetch_grades(opener, ANDRE_ID, "Andre")
         arina_grades = fetch_grades(opener, ARINA_ID, "Arina")
         log.info(f"Grades: Andre={len(andre_grades)}, Arina={len(arina_grades)} courses")
+        if len(andre_grades) == 0 and len(arina_grades) == 0:
+            scrape_error = "Login succeeded but no grades were parsed. The Genesis page structure may have changed."
     except Exception as e:
+        scrape_error = str(e)
         log.error(f"Genesis scrape failed: {e}")
+
+    if scrape_error:
+        log.error(f"Scraping failed - sending error notification. Error: {scrape_error}")
+        send_error_email(scrape_error)
+        log.info("Daily job complete (with scrape error).")
+        return
+
     alerts = detect_alerts(andre_grades, arina_grades)
     try:
         html = build_email(andre_grades, arina_grades, alerts)
