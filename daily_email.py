@@ -183,6 +183,12 @@ def fetch_grades(opener, student_id, student_name):
     if len(html) < 500:
         log.error(f"Response too short for {student_name} - likely redirected to login")
         return []
+    # Debug: log what the notecard section actually contains
+    nc_pos = html.find('notecard')
+    if nc_pos >= 0:
+        log.info(f"Notecard HTML snippet for {student_name}: {repr(html[nc_pos:nc_pos+300])}")
+    else:
+        log.warning(f"No notecard in HTML for {student_name}. Sample: {repr(html[2000:2300])}")
     return parse_grades(html, student_name)
 
 def detect_alerts(andre_grades, arina_grades):
