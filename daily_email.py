@@ -385,6 +385,12 @@ def run_daily_job():
 
 
 if __name__ == "__main__":
+    import subprocess
+    try:
+        subprocess.run(["playwright", "install", "chromium", "--with-deps"], check=True)
+        log.info("Playwright Chromium installed.")
+    except Exception as _e:
+        log.warning(f"Playwright install: {_e}")
     log.info(f"Started. Scheduled daily at {SEND_TIME}.")
     run_daily_job()  # startup run for testing
     schedule.every().day.at(SEND_TIME).do(run_daily_job)
