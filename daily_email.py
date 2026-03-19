@@ -75,7 +75,10 @@ def genesis_login():
         "Accept-Language": "en-US,en;q=0.5",
         "Referer": "https://parents.chatham-nj.org/genesis/parents",
     })
+    GENESIS_LASTVISIT = os.environ.get("GENESIS_LASTVISIT", "")
     session.cookies.set("JSESSIONID", GENESIS_SESSION, domain="parents.chatham-nj.org")
+    if GENESIS_LASTVISIT:
+        session.cookies.set("lastvisit", GENESIS_LASTVISIT, domain="parents.chatham-nj.org")
     resp = session.get("https://parents.chatham-nj.org/genesis/parents", verify=False, allow_redirects=True)
     if "j_security_check" in resp.url or "gohome=true" in resp.url:
         raise Exception(f"GENESIS_SESSION is expired. Please refresh the JSESSIONID cookie from your browser.")
@@ -393,7 +396,7 @@ def run_daily_job():
 
 if __name__ == "__main__":
     log.info(f"Started. Scheduled daily at {SEND_TIME}.")
-    # run_daily_job()  # startup disabled - Genesis blocks scripted login
+    run_daily_job()  # startup run for testing
     schedule.every().day.at(SEND_TIME).do(run_daily_job)
     while True:
         schedule.run_pending()
