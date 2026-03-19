@@ -60,25 +60,26 @@ SUBJECT_SHORT = {
 
 
 def genesis_login():
-    """Login to Genesis using requests.Session for proper cookie handling."""
+    """Use browser JSESSIONID cookie - Genesis shows CAPTCHA to scripts so we cant login programmatically.
+    Get JSESSIONID by logging into Genesis in Chrome, then DevTools -> Application -> Cookies.
+    Store it in Railway as GENESIS_SESSION env var. Refresh when it expires (usually a few days).
+    """
     import requests
+    GENESIS_SESSION = os.environ.get("GENESIS_SESSION", "")
+    if not GENESIS_SESSION:
+        raise Exception("GENESIS_SESSION not set. Log into Genesis in Chrome, copy JSESSIONID from DevTools -> Application -> Cookies, paste into Railway env vars.")
     session = requests.Session()
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
+        "Referer": "https://parents.chatham-nj.org/genesis/parents",
     })
-    # Step 1: GET login page to pick up pre-login cookies
-    session.get("https://parents.chatham-nj.org/genesis/sis/view?gohome=true", verify=False)
-    # Step 2: POST credentials
-    resp = session.post(
-        "https://parents.chatham-nj.org/genesis/sis/j_security_check?parents=Y",
-        data={"j_username": GENESIS_USER, "j_password": GENESIS_PASS, "idTokenString": ""},
-        headers={"Referer": "https://parents.chatham-nj.org/genesis/sis/view?gohome=true"},
-        verify=False,
-        allow_redirects=True,
-    )
-    log.info(f"Genesis login: status={resp.status_code} url={resp.url[:60]} cookies={list(session.cookies.keys())}")
+    session.cookies.set("JSESSIONID", GENESIS_SESSION, domain="parents.chatham-nj.org")
+    resp = session.get("https://parents.chatham-nj.org/genesis/parents", verify=False, allow_redirects=True)
+    if "j_security_check" in resp.url or "gohome=true" in resp.url:
+        raise Exception(f"GENESIS_SESSION is expired. Please refresh the JSESSIONID cookie from your browser.")
+    log.info(f"Genesis session valid: len={len(resp.text)} url={resp.url[:80]}")
     return session
 
 
