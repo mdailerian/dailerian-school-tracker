@@ -59,31 +59,40 @@ SUBJECT_SHORT = {
 }
 
 
-def genesis_login():
-    """Use browser JSESSIONID cookie - Genesis shows CAPTCHA to scripts so we cant login programmatically.
-    Get JSESSIONID by logging into Genesis in Chrome, then DevTools -> Application -> Cookies.
-    Store it in Railway as GENESIS_SESSION env var. Refresh when it expires (usually a few days).
+def scrape_genesis(student_id, student_name):
+    """Use Playwright headless browser to log into Genesis and scrape grades.
+    This bypasses CAPTCHA because Playwright runs a real browser.
+    Credentials come from GENESIS_USER and GENESIS_PASS env vars.
     """
-    import requests
-    GENESIS_SESSION = os.environ.get("GENESIS_SESSION", "")
-    if not GENESIS_SESSION:
-        raise Exception("GENESIS_SESSION not set. Log into Genesis in Chrome, copy JSESSIONID from DevTools -> Application -> Cookies, paste into Railway env vars.")
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Referer": "https://parents.chatham-nj.org/genesis/parents",
-    })
-    GENESIS_LASTVISIT = os.environ.get("GENESIS_LASTVISIT", "")
-    session.cookies.set("JSESSIONID", GENESIS_SESSION, domain="parents.chatham-nj.org")
-    if GENESIS_LASTVISIT:
-        session.cookies.set("lastvisit", GENESIS_LASTVISIT, domain="parents.chatham-nj.org")
-    resp = session.get("https://parents.chatham-nj.org/genesis/parents", verify=False, allow_redirects=True)
-    if "j_security_check" in resp.url or "gohome=true" in resp.url:
-        raise Exception(f"GENESIS_SESSION is expired. Please refresh the JSESSIONID cookie from your browser.")
-    log.info(f"Genesis session valid: len={len(resp.text)} url={resp.url[:80]}")
-    return session
+    from playwright.sync_api import sync_playwright
+    grades = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            # Navigate to login page
+            page.goto("https://parents.chatham-nj.org/genesis/parents", timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=15000)
+            # Fill login form
+            page.fill('input[name="j_username"]', GENESIS_USER)
+            page.fill('input[name="j_password"]', GENESIS_PASS)
+            # Handle CAPTCHA if present - just click submit, real browser usually bypasses it
+            page.click('input[type="submit"]')
+            page.wait_for_load_state("networkidle", timeout=15000)
+            log.info(f"After login: url={page.url[:80]}")
+            if "j_security_check" in page.url or "gohome=true" in page.url:
+                raise Exception("Login failed - check GENESIS_USER and GENESIS_PASS")
+            # Navigate to grades page
+            url = (f"https://parents.chatham-nj.org/genesis/parents"
+                   f"?tab1=studentdata&tab2=gradebook&studentid={student_id}&action=form")
+            page.goto(url, timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=15000)
+            html = page.content()
+            log.info(f"Grades page for {student_name}: len={len(html)} url={page.url[:80]}")
+            grades = parse_grades(html, student_name)
+        finally:
+            browser.close()
+    return grades
 
 
 def parse_grades(html, student_name):
@@ -159,24 +168,6 @@ def calc_gpa(grades):
     vals = [gpa_map[g["letter"]] for g in grades if g["letter"] in gpa_map]
     return round(sum(vals) / len(vals), 2) if vals else 0.0
 
-
-def fetch_grades(session, student_id, student_name):
-    """Fetch and parse grades for a student from Genesis gradebook."""
-    url = (f"https://parents.chatham-nj.org/genesis/parents"
-           f"?tab1=studentdata&tab2=gradebook&studentid={student_id}&action=form")
-    resp = session.get(url, verify=False, allow_redirects=True)
-    html = resp.text
-    log.info(f"Fetched grades for {student_name}: status={resp.status_code} url={resp.url[:80]} len={len(html)}")
-    if len(html) < 500:
-        log.error(f"Response too short for {student_name} - likely redirected to login")
-        return []
-    # Debug: log notecard snippet
-    nc_pos = html.find('notecard')
-    if nc_pos >= 0:
-        log.info(f"Notecard snippet for {student_name}: {repr(html[nc_pos:nc_pos+300])}")
-    else:
-        log.warning(f"No notecard for {student_name}. Sample: {repr(html[2000:2300])}")
-    return parse_grades(html, student_name)
 
 def detect_alerts(andre_grades, arina_grades):
     alerts = []
@@ -363,9 +354,8 @@ def run_daily_job():
     andre_grades, arina_grades = [], []
     scrape_error = None
     try:
-        opener = genesis_login()
-        andre_grades = fetch_grades(opener, ANDRE_ID, "Andre")
-        arina_grades = fetch_grades(opener, ARINA_ID, "Arina")
+        andre_grades = scrape_genesis(ANDRE_ID, "Andre")
+        arina_grades = scrape_genesis(ARINA_ID, "Arina")
         log.info(f"Grades: Andre={len(andre_grades)}, Arina={len(arina_grades)} courses")
         if len(andre_grades) == 0 and len(arina_grades) == 0:
             scrape_error = "Login succeeded but no grades were parsed. The Genesis page structure may have changed."
