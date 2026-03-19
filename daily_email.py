@@ -60,40 +60,26 @@ SUBJECT_SHORT = {
 
 
 def genesis_login():
-    import http.cookiejar
-    import ssl
-    jar = http.cookiejar.CookieJar()
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPCookieProcessor(jar),
-        urllib.request.HTTPSHandler(context=ctx),
-    )
-    opener.addheaders = [
-        ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0"),
-        ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
-        ("Accept-Language", "en-US,en;q=0.5"),
-        ("Connection", "keep-alive"),
-    ]
-    # Step 1: GET the login page to pick up any pre-login cookies
-    opener.open("https://parents.chatham-nj.org/genesis/sis/view?gohome=true")
+    """Login to Genesis using requests.Session for proper cookie handling."""
+    import requests
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    })
+    # Step 1: GET login page to pick up pre-login cookies
+    session.get("https://parents.chatham-nj.org/genesis/sis/view?gohome=true", verify=False)
     # Step 2: POST credentials
-    data = urllib.parse.urlencode({
-        "j_username": GENESIS_USER,
-        "j_password": GENESIS_PASS,
-        "idTokenString": "",
-    }).encode("utf-8")
-    req = urllib.request.Request(
+    resp = session.post(
         "https://parents.chatham-nj.org/genesis/sis/j_security_check?parents=Y",
-        data=data,
-        method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded",
-                 "Referer": "https://parents.chatham-nj.org/genesis/sis/view?gohome=true"},
+        data={"j_username": GENESIS_USER, "j_password": GENESIS_PASS, "idTokenString": ""},
+        headers={"Referer": "https://parents.chatham-nj.org/genesis/sis/view?gohome=true"},
+        verify=False,
+        allow_redirects=True,
     )
-    opener.open(req)
-    log.info("Genesis login successful.")
-    return opener
+    log.info(f"Genesis login: status={resp.status_code} url={resp.url[:60]} cookies={list(session.cookies.keys())}")
+    return session
 
 
 def parse_grades(html, student_name):
@@ -170,25 +156,22 @@ def calc_gpa(grades):
     return round(sum(vals) / len(vals), 2) if vals else 0.0
 
 
-def fetch_grades(opener, student_id, student_name):
+def fetch_grades(session, student_id, student_name):
     """Fetch and parse grades for a student from Genesis gradebook."""
-    # Use the weekly summary URL which contains all MP grades in one page
     url = (f"https://parents.chatham-nj.org/genesis/parents"
-           f"?tab1=studentdata&tab2=gradebook&tab3=weeklysummary"
-           f"&studentid={student_id}&action=form")
-    with opener.open(url) as resp:
-        final_url = resp.url
-        html = resp.read().decode("utf-8", errors="replace")
-    log.info(f"Fetched grades for {student_name}: url={final_url[:80]}, len={len(html)}")
+           f"?tab1=studentdata&tab2=gradebook&studentid={student_id}&action=form")
+    resp = session.get(url, verify=False, allow_redirects=True)
+    html = resp.text
+    log.info(f"Fetched grades for {student_name}: status={resp.status_code} url={resp.url[:80]} len={len(html)}")
     if len(html) < 500:
         log.error(f"Response too short for {student_name} - likely redirected to login")
         return []
-    # Debug: log what the notecard section actually contains
+    # Debug: log notecard snippet
     nc_pos = html.find('notecard')
     if nc_pos >= 0:
-        log.info(f"Notecard HTML snippet for {student_name}: {repr(html[nc_pos:nc_pos+300])}")
+        log.info(f"Notecard snippet for {student_name}: {repr(html[nc_pos:nc_pos+300])}")
     else:
-        log.warning(f"No notecard in HTML for {student_name}. Sample: {repr(html[2000:2300])}")
+        log.warning(f"No notecard for {student_name}. Sample: {repr(html[2000:2300])}")
     return parse_grades(html, student_name)
 
 def detect_alerts(andre_grades, arina_grades):
@@ -409,7 +392,7 @@ def run_daily_job():
 
 if __name__ == "__main__":
     log.info(f"Started. Scheduled daily at {SEND_TIME}.")
-    run_daily_job()  # TEST RUN - will disable after
+    run_daily_job()  # startup run for testing
     schedule.every().day.at(SEND_TIME).do(run_daily_job)
     while True:
         schedule.run_pending()
