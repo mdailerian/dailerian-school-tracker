@@ -97,69 +97,63 @@ def genesis_login():
 
 
 def parse_grades(html, student_name):
-    from html.parser import HTMLParser
-
-    class SpanParser(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.in_notecard = False
-            self.in_span = False
-            self.spans = []
-
-        def handle_starttag(self, tag, attrs):
-            attrs_dict = dict(attrs)
-            if tag == "table" and attrs_dict.get("class") == "notecard":
-                self.in_notecard = True
-            if self.in_notecard and tag == "span":
-                self.in_span = True
-
-        def handle_endtag(self, tag):
-            if self.in_notecard and tag == "table":
-                self.in_notecard = False
-            if tag == "span":
-                self.in_span = False
-
-        def handle_data(self, data):
-            if self.in_notecard and self.in_span:
-                text = data.strip()
-                if text:
-                    self.spans.append(text)
-
-    parser = SpanParser()
-    parser.feed(html)
-    spans = parser.spans
+    """Parse grades from Genesis gradebook HTML using regex - handles any HTML structure."""
+    import re
     grades = []
-    i = 0
-    while i < len(spans):
-        if spans[i] in ("FY", "S1", "S2", "Q1", "Q2", "Q3", "Q4") and i + 2 < len(spans) and spans[i+1] == "|":
-            subject = spans[i+2]
-            i += 3
-            grade_vals = []
-            while i < len(spans) and spans[i] not in ("FY", "S1", "S2", "Q1", "Q2", "Q3", "Q4"):
-                val = spans[i]
-                if val == "---":
-                    grade_vals.append(None)
-                elif val != "|":
-                    try:
-                        grade_vals.append(float(val))
-                    except ValueError:
-                        pass
-                i += 1
-            non_none = [g for g in grade_vals if g is not None]
-            current = non_none[-1] if non_none else None
-            prev = non_none[-2] if len(non_none) >= 2 else None
-            if current is not None:
-                grades.append({
-                    "subject": subject,
-                    "current": current,
-                    "prev": prev,
-                    "letter": score_to_letter(current),
-                })
-        else:
-            i += 1
+    # Strip all HTML tags to get plain text
+    text = re.sub(r'<[^>]+>', ' ', html)
+    # Collapse whitespace
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n+', '\n', text)
+
+    # Find the notecard section - everything between student name and footer
+    # Look for the block that contains marking period patterns like MP1, MP2 etc
+    # Pattern: term | CourseName ... teacher ... MP1 date MP2 date grade grade
+    # Extract all spans of text that look like: FY | CourseName or S2 | CourseName
+    term_pat = re.compile(
+        r'(FY|S1|S2|Q1|Q2|Q3|Q4)\s*\|\s*'  # term
+        r'([A-Za-z][^\n]{3,60?})\n'           # course name (non-greedy)
+    )
+    # Simpler approach: find all grade values associated with MP periods
+    # The page text looks like:
+    # "Honors English 10 ... MP1 8/25 to 1/23 MP2 1/24 to 6/16 75.00 84.00"
+    # Extract course blocks between "FY |" or "S2 |" markers
+    blocks = re.split(r'(?:FY|S1|S2|Q1|Q2|Q3|Q4)\s*\|', text)
+    if len(blocks) < 2:
+        log.warning(f"Could not find term markers in HTML for {student_name}. len={len(text)}")
+        return []
+
+    for block in blocks[1:]:  # skip first (before any course)
+        lines = [l.strip() for l in block.split('\n') if l.strip()]
+        if not lines:
+            continue
+        # First non-empty line is the course name
+        course_name = lines[0].strip()
+        if len(course_name) < 3 or len(course_name) > 80:
+            continue
+        # Find all grade values (numbers like 75.00, 84.00) in the block
+        grade_vals = re.findall(r'\b(\d{2,3}\.\d{2})\b', block)
+        grade_floats = []
+        for g in grade_vals:
+            try:
+                v = float(g)
+                if 0 <= v <= 100:
+                    grade_floats.append(v)
+            except ValueError:
+                pass
+        if not grade_floats:
+            continue
+        current = grade_floats[-1]
+        prev = grade_floats[-2] if len(grade_floats) >= 2 else None
+        grades.append({
+            "subject": course_name,
+            "current": current,
+            "prev": prev,
+            "letter": score_to_letter(current),
+        })
+
     log.info(f"Parsed {len(grades)} courses for {student_name}.")
     return grades
-
 
 def score_to_letter(score):
     if score is None: return "N/A"
@@ -177,24 +171,19 @@ def calc_gpa(grades):
 
 
 def fetch_grades(opener, student_id, student_name):
+    """Fetch and parse grades for a student from Genesis gradebook."""
+    # Use the weekly summary URL which contains all MP grades in one page
     url = (f"https://parents.chatham-nj.org/genesis/parents"
-           f"?tab1=studentdata&tab2=gradebook&studentid={student_id}&action=form")
+           f"?tab1=studentdata&tab2=gradebook&tab3=weeklysummary"
+           f"&studentid={student_id}&action=form")
     with opener.open(url) as resp:
         final_url = resp.url
         html = resp.read().decode("utf-8", errors="replace")
-    log.info(f"Fetched grades page for {student_name}: final_url={final_url}, html_len={len(html)}")
-    # Check if we got redirected to login
-    if "j_security_check" in final_url or "gohome=true" in final_url or len(html) < 1000:
-        log.error(f"Session expired or redirected for {student_name}. URL: {final_url}")
+    log.info(f"Fetched grades for {student_name}: url={final_url[:80]}, len={len(html)}")
+    if len(html) < 500:
+        log.error(f"Response too short for {student_name} - likely redirected to login")
         return []
-    # Log snippet to debug HTML structure
-    notecard_pos = html.find("notecard")
-    if notecard_pos >= 0:
-        log.info(f"Found notecard at pos {notecard_pos}: {html[notecard_pos:notecard_pos+100]}")
-    else:
-        log.warning(f"No notecard found in HTML for {student_name}. Snippet: {html[1000:1200]}")
     return parse_grades(html, student_name)
-
 
 def detect_alerts(andre_grades, arina_grades):
     alerts = []
