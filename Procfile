@@ -1,1 +1,1 @@
-worker: python daily_email.py
+worker: playwright install chromium && python daily_email.py
